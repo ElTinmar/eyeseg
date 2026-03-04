@@ -31,26 +31,87 @@ class InteractionState(Enum):
     IDLE = 0
     ADDING_LABEL = 1
 
+def get_eye_angles_from_keypoints(
+        tracking: pd.DataFrame,
+        likelihood_threshold: float = 0.9
+    ):
+
+    def compute_angle_between_vectors(v1: np.ndarray, v2: np.ndarray):
+        cos_angle = np.sum(v1 * v2, axis=1)
+        sin_angle = np.cross(v1, v2)
+        angle = np.arctan2(sin_angle, cos_angle)
+        return angle
+
+    left_front = tracking.heatmap_tracker.eye_left_front[['x', 'y']].to_numpy()
+    left_back = tracking.heatmap_tracker.eye_left_back[['x', 'y']].to_numpy()
+    right_front = tracking.heatmap_tracker.eye_right_front[['x', 'y']].to_numpy()
+    right_back = tracking.heatmap_tracker.eye_right_back[['x', 'y']].to_numpy()
+
+    left_front_likelihood = tracking.heatmap_tracker.eye_left_front.likelihood.to_numpy()
+    left_back_likelihood = tracking.heatmap_tracker.eye_left_back.likelihood.to_numpy()
+    right_front_likelihood = tracking.heatmap_tracker.eye_right_front.likelihood.to_numpy()
+    right_back_likelihood = tracking.heatmap_tracker.eye_right_back.likelihood.to_numpy()
+
+    # origin top-left
+    left_vector = left_back - left_front  
+    right_vector = right_back - right_front
+
+    left = compute_angle_between_vectors(left_vector, np.array([0,1]))
+    right = compute_angle_between_vectors(right_vector, np.array([0,1]))
+
+    left[(left_front_likelihood < likelihood_threshold) | (left_back_likelihood < likelihood_threshold)] = np.nan
+    right[(right_front_likelihood < likelihood_threshold) | (right_back_likelihood < likelihood_threshold)] = np.nan
+
+    return np.rad2deg(left), np.rad2deg(right)
+
 class SessionModel(QtCore.QObject):
 
     frame_changed = QtCore.pyqtSignal(int)
     labels_changed = QtCore.pyqtSignal()
 
-    def __init__(self, video_path, tracking_csv):
+    def __init__(self):
         super().__init__()
 
-        self.video_path = video_path
-        self.cap = cv2.VideoCapture(video_path)
-        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.cap: cv2.VideoCapture | None = None
+        self.video_path: str | None = None
+        self.total_frames: int = 0
+        self.fps: float = 30.0
 
         self._current_frame = 0
         self._last_read_frame = -1
         self._cached_frame = None
         self.saved = True
 
-        self.tracking = pd.read_csv(tracking_csv, header=[0,1,2])
+        self.tracking: pd.DataFrame | None = None
+        self.left: np.ndarray | None = None
+        self.right: np.ndarray | None = None
+        self.time: np.ndarray | None = None
+        self.left_smooth: np.ndarray | None = None
+        self.right_smooth: np.ndarray | None = None
+
         self.labels = pd.DataFrame(columns=["start", "end", "category"])
+
+    def load_video(self, path: str):
+
+        if self.cap:
+            self.cap.release()
+
+        self.video_path = path
+        self.cap = cv2.VideoCapture(path)
+        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self._current_frame = 0
+        self._last_read_frame = -1
+        self.frame_changed.emit(0)
+
+    def load_tracking(self, path: str):
+        self.tracking = pd.read_csv(path, header=[0,1,2])
+        self.frame_changed.emit(self._current_frame)
+        self.left, self.right = get_eye_angles_from_keypoints(self.tracking)
+        self.left_smooth = savgol_filter(self.left, window_length=21, polyorder=2)
+        self.right_smooth = savgol_filter(self.right, window_length=21, polyorder=2)
+        n = len(self.left)
+        self.time = np.arange(n) / self.fps
 
     @property
     def current_frame(self):
@@ -64,6 +125,9 @@ class SessionModel(QtCore.QObject):
         self.frame_changed.emit(idx)
 
     def get_frame(self):
+
+        if self.cap is None:
+            return
 
         if self._current_frame == self._last_read_frame + 1:
             ret, frame = self.cap.read()
@@ -128,6 +192,9 @@ class VideoWidget(QtWidgets.QGraphicsView):
     def __init__(self, model):
         super().__init__()
         self.model = model
+        self.keypoint_items = []
+        self.overlay_visible = True
+
         self.model.frame_changed.connect(self.update_frame)
 
         self.scene = QtWidgets.QGraphicsScene()
@@ -135,9 +202,6 @@ class VideoWidget(QtWidgets.QGraphicsView):
 
         self.pixmap_item = QtWidgets.QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
-
-        self.keypoint_items = []
-        self.overlay_visible = True
 
         self.setFocusPolicy(QtCore.Qt.NoFocus)
         
@@ -158,6 +222,7 @@ class VideoWidget(QtWidgets.QGraphicsView):
         self.update_frame(0)
 
     def update_frame(self, frame_idx):
+
         frame = self.model.get_frame()
         if frame is None:
             return
@@ -187,6 +252,9 @@ class VideoWidget(QtWidgets.QGraphicsView):
         self.keypoint_items.clear()
 
         if not self.overlay_visible:
+            return
+        
+        if self.model.tracking is None:
             return
 
         row = self.model.tracking.heatmap_tracker.iloc[frame_idx]
@@ -218,28 +286,6 @@ class VideoWidget(QtWidgets.QGraphicsView):
         self.overlay_visible = not self.overlay_visible
         self.update_overlay(self.model.current_frame)
         
-def get_eye_angles_from_keypoints(tracking: pd.DataFrame):
-
-    def compute_angle_between_vectors(v1: np.ndarray, v2: np.ndarray):
-        cos_angle = np.sum(v1 * v2, axis=1)
-        sin_angle = np.cross(v1, v2)
-        angle = np.arctan2(sin_angle, cos_angle)
-        return angle
-
-    left_front = tracking.heatmap_tracker.eye_left_front[['x', 'y']].to_numpy()
-    left_back = tracking.heatmap_tracker.eye_left_back[['x', 'y']].to_numpy()
-    right_front = tracking.heatmap_tracker.eye_right_front[['x', 'y']].to_numpy()
-    right_back = tracking.heatmap_tracker.eye_right_back[['x', 'y']].to_numpy()
-
-    # origin top-left
-    left_vector = left_back - left_front  
-    right_vector = right_back - right_front
-
-    left = compute_angle_between_vectors(left_vector, np.array([0,1]))
-    right = compute_angle_between_vectors(right_vector, np.array([0,1]))
-
-    return np.rad2deg(left), np.rad2deg(right)
-
 class TimeSeriesWidget(pg.PlotWidget):
 
     def __init__(
@@ -249,20 +295,14 @@ class TimeSeriesWidget(pg.PlotWidget):
             colors = DIVERGING_4
         ):
         super().__init__()
+    
         self.model = model
         self.window_seconds = float(window_seconds)
-
-        self.left, self.right = get_eye_angles_from_keypoints(self.model.tracking)
-
+        self.region_items = []
         self.show_smooth = True  
-        self.left_smooth = savgol_filter(self.left, window_length=21, polyorder=2)
-        self.right_smooth = savgol_filter(self.right, window_length=21, polyorder=2)
 
-        n = len(self.left)
-        self.time = np.arange(n) / self.model.fps
-
-        self.left_curve = self.plot(self.time, self.left, pen=pg.mkPen(*colors[1]))
-        self.right_curve = self.plot(self.time, self.right, pen=pg.mkPen(*colors[3]))
+        self.left_curve = self.plot([0], [0], pen=pg.mkPen(*colors[1]))
+        self.right_curve = self.plot([0], [0], pen=pg.mkPen(*colors[3]))
         self.frame_line = pg.InfiniteLine(
             angle=90, 
             movable=False,
@@ -278,8 +318,6 @@ class TimeSeriesWidget(pg.PlotWidget):
         self.addItem(self.frame_line)
         self.addItem(self.zero_line)
 
-        self.region_items = []
-
         self.setDownsampling(auto=True)
         self.setClipToView(True)
         self.enableAutoRange(axis='y', enable=False)
@@ -293,12 +331,15 @@ class TimeSeriesWidget(pg.PlotWidget):
         self.update_view(0)
 
     def update_curve_data(self):
-        left_data = self.left_smooth if self.show_smooth else self.left
-        right_data = self.right_smooth if self.show_smooth else self.right
-        self.left_curve.setData(self.time, left_data)
-        self.right_curve.setData(self.time, right_data)
+        left_data = self.model.left_smooth if self.show_smooth else self.model.left
+        right_data = self.model.right_smooth if self.show_smooth else self.model.right
+        self.left_curve.setData(self.model.time, left_data)
+        self.right_curve.setData(self.model.time, right_data)
         
     def update_view(self, frame_idx):
+
+        if self.model.time is None:
+            return
 
         current_time = frame_idx / self.model.fps
         self.frame_line.setPos(current_time)
@@ -309,7 +350,7 @@ class TimeSeriesWidget(pg.PlotWidget):
         t_max = t_min + self.window_seconds
 
         # If we are at the end of the video, don't go past the max
-        max_time = len(self.time) / self.model.fps
+        max_time = len(self.model.time) / self.model.fps
         if t_max > max_time:
             t_max = max_time
             t_min = max(0, t_max - self.window_seconds)
@@ -486,7 +527,7 @@ class StateInfoWidget(QtWidgets.QFrame):
 
 class MainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, video_path, tracking_csv):
+    def __init__(self):
         super().__init__()
 
         self._label_region = None
@@ -494,7 +535,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._state = InteractionState.IDLE
         self._step = 10
 
-        self.model = SessionModel(video_path, tracking_csv)
+        self.model = SessionModel()
         self.model.frame_changed.connect(self._update_label_region)
         self.state_panel = StateInfoWidget()
         
@@ -645,38 +686,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._state = new_state
         self.state_panel.set_state(new_state)
-        
-    def load_video(self):
-
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self,
-            "Load Video",
-            "",
-            "Video Files (*.mp4 *.avi *.mov)"
-        )
-
-        if not path:
-            return
-
-        # Stop playback
-        self.pause()
-
-        # Release old capture
-        self.model.cap.release()
-
-        # Load new video
-        self.model.video_path = path
-        self.model.cap = cv2.VideoCapture(path)
-        self.model.total_frames = int(self.model.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.model.fps = self.model.cap.get(cv2.CAP_PROP_FPS)
-
-        # Reset state
-        self.model._current_frame = 0
-        self.model._last_read_frame = -1
-
-        # Update slider
-        self.frame_slider.setMaximum(self.model.total_frames - 1)
-        self.model.set_frame(0)
 
     def closeEvent(self, event):
 
@@ -707,6 +716,24 @@ class MainWindow(QtWidgets.QMainWindow):
         else:  # Cancel
             event.ignore()
 
+    def load_video(self):
+
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Load Video",
+            "",
+            "Video Files (*.mp4 *.avi *.mov)"
+        )
+
+        if not path:
+            return
+
+        self.pause()
+        self.model.load_video(path)
+        self.video.update_frame(self.model.current_frame)
+        self.plot.update_view(self.model.current_frame)
+        self.frame_slider.setMaximum(self.model.total_frames - 1)
+
     def load_tracking(self):
 
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -719,19 +746,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not path:
             return
 
-        # Load new tracking
-        self.model.tracking = pd.read_csv(path, header=[0, 1, 2])
-
-        # Recompute eye angles
-        self.plot.left, self.plot.right = get_eye_angles_from_keypoints(self.model.tracking)
-        n = len(self.plot.left)
-        self.plot.time = np.arange(n) / self.model.fps
-
-        # Update plot data
-        self.plot.left_curve.setData(self.plot.time, self.plot.left)
-        self.plot.right_curve.setData(self.plot.time, self.plot.right)
-
-        self.model.set_frame(0)
+        self.model.load_tracking(path)   
+        self.plot.update_curve_data()
+        self.plot.update_view(self.model.current_frame)
+        self.video.update_frame(self.model.current_frame)
 
     def frame_to_time_string(self, frame_idx):
         total_seconds = frame_idx / self.model.fps
@@ -932,11 +950,6 @@ class MainWindow(QtWidgets.QMainWindow):
 if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
-
-    video_path = "/home/martin/Desktop/DATA/WT/danieau/eyes/00_07dpf_WT_Thu_11_Dec_2025_11h23min15sec_fish_0_eyes.mp4"
-    tracking_csv = "/home/martin/Downloads/11-44-00/video_preds/00_07dpf_WT_Thu_11_Dec_2025_11h23min15sec_fish_0_eyes.csv"
-
-    win = MainWindow(video_path, tracking_csv)
+    win = MainWindow()
     win.show()
-
     sys.exit(app.exec_())
