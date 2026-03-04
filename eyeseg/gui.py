@@ -7,8 +7,6 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter
 import pyqtgraph as pg
 
-
-
 class SessionModel(QtCore.QObject):
 
     frame_changed = QtCore.pyqtSignal(int)
@@ -17,7 +15,6 @@ class SessionModel(QtCore.QObject):
     def __init__(self, video_path, tracking_csv):
         super().__init__()
 
-        # ---- Video ----
         self.video_path = video_path
         self.cap = cv2.VideoCapture(video_path)
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -27,13 +24,9 @@ class SessionModel(QtCore.QObject):
         self._last_read_frame = -1
         self._cached_frame = None
 
-        # ---- Tracking ----
         self.tracking = pd.read_csv(tracking_csv, header=[0,1,2])
-
-        # ---- Labels ----
         self.labels = pd.DataFrame(columns=["start", "end", "category"])
 
-    # --------------------------------------------------------
 
     @property
     def current_frame(self):
@@ -45,8 +38,6 @@ class SessionModel(QtCore.QObject):
             return
         self._current_frame = idx
         self.frame_changed.emit(idx)
-
-    # --------------------------------------------------------
 
     def get_frame(self):
 
@@ -62,8 +53,6 @@ class SessionModel(QtCore.QObject):
         self._last_read_frame = self._current_frame
         self._cached_frame = frame
         return frame
-
-    # --------------------------------------------------------
 
     def add_label(self, start, end, category):
         new_row = {"start": start, "end": end, "category": category}
@@ -197,19 +186,21 @@ def get_eye_angles_from_keypoints(tracking: pd.DataFrame):
     left = compute_angle_between_vectors(left_vector, np.array([0,1]))
     right = compute_angle_between_vectors(right_vector, np.array([0,1]))
 
-    return left, right
+    return np.rad2deg(left), np.rad2deg(right)
 
 class TimeSeriesWidget(pg.PlotWidget):
 
-    def __init__(self, model):
+    def __init__(self, model, window_seconds=5.0):
         super().__init__()
         self.model = model
+        self.window_seconds = float(window_seconds)
 
         self.left, self.right = get_eye_angles_from_keypoints(self.model.tracking)
+        n = len(self.left)
+        self.time = np.arange(n) / self.model.fps
 
-        self.plot(self.left, pen='b')
-        self.plot(self.right, pen='g')
-
+        self.left_curve = self.plot(self.time, self.left, pen=pg.mkPen('b'))
+        self.right_curve = self.plot(self.time, self.right, pen=pg.mkPen('g'))
         self.frame_line = pg.InfiniteLine(angle=90, movable=False)
         self.addItem(self.frame_line)
 
@@ -217,29 +208,60 @@ class TimeSeriesWidget(pg.PlotWidget):
 
         self.setDownsampling(auto=True)
         self.setClipToView(True)
+        self.enableAutoRange(axis='y', enable=True)
+        self.enableAutoRange(axis='x', enable=False)
 
-        self.model.frame_changed.connect(self.update_frame_line)
+        self.model.frame_changed.connect(self.update_view)
         self.model.labels_changed.connect(self.update_regions)
+
+        self.update_view(0)
 
     # --------------------------------------------------------
 
-    def update_frame_line(self, idx):
-        self.frame_line.setPos(idx)
+    def update_view(self, frame_idx):
+
+        current_time = frame_idx / self.model.fps
+        self.frame_line.setPos(current_time)
+
+        # Center the current time
+        half_window = self.window_seconds / 2
+        t_min = max(0, current_time - half_window)
+        t_max = t_min + self.window_seconds
+
+        # If we are at the end of the video, don't go past the max
+        max_time = len(self.time) / self.model.fps
+        if t_max > max_time:
+            t_max = max_time
+            t_min = max(0, t_max - self.window_seconds)
+
+        self.setXRange(t_min, t_max, padding=0)
 
     # --------------------------------------------------------
 
     def update_regions(self):
+        """
+        Draw shaded regions for labels.
+        """
 
+        # Remove old regions
         for r in self.region_items:
             self.removeItem(r)
         self.region_items.clear()
 
         for _, row in self.model.labels.iterrows():
+
+            start_time = row["start"] / self.model.fps
+            end_time = row["end"] / self.model.fps
+
             region = pg.LinearRegionItem(
-                values=(row["start"], row["end"]),
+                values=(start_time, end_time),
                 brush=(255, 0, 0, 60),
                 movable=False
             )
+
+            # Keep region behind curves and cursor
+            region.setZValue(-10)
+
             self.addItem(region)
             self.region_items.append(region)
 
@@ -257,8 +279,6 @@ class LabelTable(QtWidgets.QTableWidget):
 
         self.cellDoubleClicked.connect(self.jump_to_label)
 
-    # --------------------------------------------------------
-
     def refresh(self):
         df = self.model.labels
         self.setRowCount(len(df))
@@ -267,8 +287,6 @@ class LabelTable(QtWidgets.QTableWidget):
             self.setItem(i, 0, QtWidgets.QTableWidgetItem(str(row["start"])))
             self.setItem(i, 1, QtWidgets.QTableWidgetItem(str(row["end"])))
             self.setItem(i, 2, QtWidgets.QTableWidgetItem(str(row["category"])))
-
-    # --------------------------------------------------------
 
     def jump_to_label(self, row, col):
         start = int(self.item(row, 0).text())
@@ -292,6 +310,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.play_timer.setInterval(interval_ms)
         self.video.resize(512, 512)
         
+        self.frame_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.frame_slider.setMinimum(0)
+        self.frame_slider.setMaximum(self.model.total_frames - 1)
+        self.frame_slider.setValue(self.model.current_frame)
+        self.frame_slider.setTickInterval(1)
+        self.frame_slider.setSingleStep(1)
+        self.frame_slider.setPageStep(10)  
+        self.frame_slider.setTracking(True)
+        self.frame_slider.valueChanged.connect(self.model.set_frame)
+        self.model.frame_changed.connect(self._update_slider)
+        
+        self.slider_label_frame = QtWidgets.QLabel(f"{self.model.current_frame}/{self.model.total_frames}")
+        self.model.frame_changed.connect(lambda idx: self.slider_label_frame.setText(f"{idx}/{self.model.total_frames}"))
+
+        self.slider_label_time = QtWidgets.QLabel(f"{self.frame_to_time_string(0)}/{self.frame_to_time_string(self.model.total_frames)}")
+        self.model.frame_changed.connect(lambda idx: self.slider_label_time.setText(f"{self.frame_to_time_string(idx)}/{self.frame_to_time_string(self.model.total_frames)}"))
+
         self.plot = TimeSeriesWidget(self.model)
         self.table = LabelTable(self.model)
 
@@ -305,8 +340,14 @@ class MainWindow(QtWidgets.QMainWindow):
         top.addWidget(self.video)
         top.addWidget(self.plot)
 
+        slider = QtWidgets.QHBoxLayout()
+        slider.addWidget(self.slider_label_time)
+        slider.addWidget(self.frame_slider)
+        slider.addWidget(self.slider_label_frame)
+
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(top)
+        layout.addLayout(slider)
         layout.addWidget(self.table)
         layout.addWidget(add_label_btn)
         layout.addWidget(save_btn)
@@ -317,6 +358,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.resize(1200, 900)
 
+    def frame_to_time_string(self, frame_idx):
+        total_seconds = frame_idx / self.model.fps
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)
+        milliseconds = int((total_seconds - int(total_seconds)) * 1000)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+
+    def _update_slider(self, frame_idx):
+        self.frame_slider.blockSignals(True)
+        self.frame_slider.setValue(frame_idx)
+        self.frame_slider.blockSignals(False)
+        
     def _advance_frame(self):
 
         next_frame = self.model.current_frame + 1
@@ -373,8 +427,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         self.model.add_label(start, end, category)
-
-    # --------------------------------------------------------
 
     def save_labels(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
