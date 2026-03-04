@@ -477,6 +477,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Save Labels
         save_labels_action = QtWidgets.QAction("Save Labels...", self)
         save_labels_action.triggered.connect(self.save_labels)
+        save_labels_action.setShortcut(QKeySequence("Ctrl+S"))
+        save_labels_action.setShortcutContext(QtCore.Qt.ApplicationShortcut)
         file_menu.addAction(save_labels_action)
 
         file_menu.addSeparator()
