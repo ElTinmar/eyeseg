@@ -19,7 +19,7 @@ class LabelCategory(Enum):
 LABEL_COLOR = {
     LabelCategory.EYE_CONVERGENCE: (255, 200, 120, 120),
     LabelCategory.PURSUITS: (144, 238, 144, 120),
-    LabelCategory.SPONTANEOUS_SQUARE: (144, 238, 144, 120)
+    LabelCategory.SPONTANEOUS_SQUARE: (186, 85, 211, 120)
 }
 
 DIVERGING_4 = (
