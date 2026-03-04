@@ -42,7 +42,7 @@ class SessionModel(QtCore.QObject):
         self._current_frame = 0
         self._last_read_frame = -1
         self._cached_frame = None
-        self.saved = False
+        self.saved = True
 
         self.tracking = pd.read_csv(tracking_csv, header=[0,1,2])
         self.labels = pd.DataFrame(columns=["start", "end", "category"])
