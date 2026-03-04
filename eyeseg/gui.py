@@ -255,8 +255,8 @@ class TimeSeriesWidget(pg.PlotWidget):
         self.left, self.right = get_eye_angles_from_keypoints(self.model.tracking)
 
         self.show_smooth = False  
-        self.left_smooth = savgol_filter(self.left, window_length=11, polyorder=2)
-        self.right_smooth = savgol_filter(self.right, window_length=11, polyorder=2)
+        self.left_smooth = savgol_filter(self.left, window_length=21, polyorder=2)
+        self.right_smooth = savgol_filter(self.right, window_length=21, polyorder=2)
 
         n = len(self.left)
         self.time = np.arange(n) / self.model.fps
