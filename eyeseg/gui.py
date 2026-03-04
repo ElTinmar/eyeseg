@@ -530,7 +530,7 @@ class MainWindow(QtWidgets.QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        self.resize(1200, 900)
+        #self.resize(1200, 900)
 
     def _create_menu(self):
 
