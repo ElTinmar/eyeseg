@@ -786,7 +786,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._is_playing = True
         self.play_timer.start()
 
-
     def pause(self):
         if not self._is_playing:
             return
