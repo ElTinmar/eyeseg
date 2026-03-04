@@ -435,8 +435,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot = TimeSeriesWidget(self.model)
         self.table = LabelTable(self.model)
 
-        save_btn = QtWidgets.QPushButton("Save Labels")
-        save_btn.clicked.connect(self.save_labels)
+        self._create_menu()
 
         top = QtWidgets.QHBoxLayout()
         top.addWidget(self.video)
@@ -451,13 +450,99 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addLayout(top)
         layout.addLayout(slider)
         layout.addWidget(self.table)
-        layout.addWidget(save_btn)
 
         container = QtWidgets.QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
 
         self.resize(1200, 900)
+
+    def _create_menu(self):
+
+        menubar = self.menuBar()
+        file_menu = menubar.addMenu("File")
+
+        # Load Video
+        load_video_action = QtWidgets.QAction("Load Video...", self)
+        load_video_action.triggered.connect(self.load_video)
+        file_menu.addAction(load_video_action)
+
+        # Load Tracking
+        load_tracking_action = QtWidgets.QAction("Load Tracking CSV...", self)
+        load_tracking_action.triggered.connect(self.load_tracking)
+        file_menu.addAction(load_tracking_action)
+
+        file_menu.addSeparator()
+
+        # Save Labels
+        save_labels_action = QtWidgets.QAction("Save Labels...", self)
+        save_labels_action.triggered.connect(self.save_labels)
+        file_menu.addAction(save_labels_action)
+
+        file_menu.addSeparator()
+
+        # Exit
+        exit_action = QtWidgets.QAction("Exit", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+    def load_video(self):
+
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Load Video",
+            "",
+            "Video Files (*.mp4 *.avi *.mov)"
+        )
+
+        if not path:
+            return
+
+        # Stop playback
+        self.pause()
+
+        # Release old capture
+        self.model.cap.release()
+
+        # Load new video
+        self.model.video_path = path
+        self.model.cap = cv2.VideoCapture(path)
+        self.model.total_frames = int(self.model.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.model.fps = self.model.cap.get(cv2.CAP_PROP_FPS)
+
+        # Reset state
+        self.model._current_frame = 0
+        self.model._last_read_frame = -1
+
+        # Update slider
+        self.frame_slider.setMaximum(self.model.total_frames - 1)
+        self.model.set_frame(0)
+
+    def load_tracking(self):
+
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Load Tracking CSV",
+            "",
+            "CSV Files (*.csv)"
+        )
+
+        if not path:
+            return
+
+        # Load new tracking
+        self.model.tracking = pd.read_csv(path, header=[0, 1, 2])
+
+        # Recompute eye angles
+        self.plot.left, self.plot.right = get_eye_angles_from_keypoints(self.model.tracking)
+        n = len(self.plot.left)
+        self.plot.time = np.arange(n) / self.model.fps
+
+        # Update plot data
+        self.plot.left_curve.setData(self.plot.time, self.plot.left)
+        self.plot.right_curve.setData(self.plot.time, self.plot.right)
+
+        self.model.set_frame(0)
 
     def frame_to_time_string(self, frame_idx):
         total_seconds = frame_idx / self.model.fps
