@@ -190,7 +190,12 @@ def get_eye_angles_from_keypoints(tracking: pd.DataFrame):
 
 class TimeSeriesWidget(pg.PlotWidget):
 
-    def __init__(self, model, window_seconds=5.0):
+    def __init__(
+            self, 
+            model, 
+            window_seconds=10.0,
+            colors = DIVERGING_4
+        ):
         super().__init__()
         self.model = model
         self.window_seconds = float(window_seconds)
@@ -199,8 +204,8 @@ class TimeSeriesWidget(pg.PlotWidget):
         n = len(self.left)
         self.time = np.arange(n) / self.model.fps
 
-        self.left_curve = self.plot(self.time, self.left, pen=pg.mkPen('b'))
-        self.right_curve = self.plot(self.time, self.right, pen=pg.mkPen('g'))
+        self.left_curve = self.plot(self.time, self.left, pen=pg.mkPen(*colors[1]))
+        self.right_curve = self.plot(self.time, self.right, pen=pg.mkPen(*colors[3]))
         self.frame_line = pg.InfiniteLine(angle=90, movable=False)
         self.addItem(self.frame_line)
 
@@ -208,8 +213,9 @@ class TimeSeriesWidget(pg.PlotWidget):
 
         self.setDownsampling(auto=True)
         self.setClipToView(True)
-        self.enableAutoRange(axis='y', enable=True)
+        self.enableAutoRange(axis='y', enable=False)
         self.enableAutoRange(axis='x', enable=False)
+        self.setYRange(-70, 70, padding=0)
 
         self.model.frame_changed.connect(self.update_view)
         self.model.labels_changed.connect(self.update_regions)
