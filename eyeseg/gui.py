@@ -2,10 +2,17 @@ import sys
 import cv2
 import pandas as pd
 import numpy as np
+from enum import Enum
 
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter
 import pyqtgraph as pg
+
+
+class LabelCategory(Enum):
+    EYE_CONVERGENCE = "eye convergence"
+    PURSUITS = "pursuits"
+
 
 class SessionModel(QtCore.QObject):
 
@@ -439,13 +446,20 @@ class MainWindow(QtWidgets.QMainWindow):
         if not ok2:
             return
 
-        category, ok3 = QtWidgets.QInputDialog.getText(
-            self, "Category", "Category:"
+        category, ok3 = QtWidgets.QInputDialog.getItem(
+            self,
+            "Category",
+            "Category:",
+            [c.value for c in LabelCategory],
+            current=0,
+            editable=False
         )
         if not ok3:
             return
 
-        self.model.add_label(start, end, category)
+        # Convert back to Enum for internal storage
+        category_enum = LabelCategory(category)
+        self.model.add_label(start, end, category_enum)
 
     def save_labels(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
