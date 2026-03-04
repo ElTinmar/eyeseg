@@ -6,6 +6,8 @@ from enum import Enum
 
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter
+from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox
+
 import pyqtgraph as pg
 
 class LabelCategory(Enum):
@@ -77,6 +79,23 @@ class SessionModel(QtCore.QObject):
             [self.labels, pd.DataFrame([new_row])],
             ignore_index=True,
         )
+        self.labels_changed.emit()
+
+    def edit_label(self, index: int, start=None, end=None, category=None):
+        if index < 0 or index >= len(self.labels):
+            return
+
+        # Work on a copy
+        row = self.labels.iloc[index].copy()
+
+        if start is not None:
+            row["start"] = int(start)
+        if end is not None:
+            row["end"] = int(end)
+        if category is not None:
+            row["category"] = category if isinstance(category, str) else str(category)
+
+        self.labels.iloc[index] = row
         self.labels_changed.emit()
 
     def delete_label(self, index):
@@ -285,19 +304,45 @@ class TimeSeriesWidget(pg.PlotWidget):
             self.addItem(region)
             self.region_items.append(region)
 
+class CategoryDelegate(QStyledItemDelegate):
+
+    def __init__(self, categories, parent=None):
+        super().__init__(parent)
+        self.categories = [c.value for c in categories]
+
+    def createEditor(self, parent, option, index):
+        combo = QComboBox(parent)
+        combo.addItems(self.categories)
+        return combo
+
+    def setEditorData(self, editor, index):
+        value = index.model().data(index, QtCore.Qt.EditRole)
+        if value in self.categories:
+            editor.setCurrentText(value)
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText(), QtCore.Qt.EditRole)
+
 class LabelTable(QtWidgets.QTableWidget):
 
     def __init__(self, model):
         super().__init__()
         self.model = model
+        self._updating = False
 
         self.setColumnCount(3)
         self.setHorizontalHeaderLabels(["Start", "End", "Category"])
+        self.setItemDelegateForColumn(2, CategoryDelegate(LabelCategory))
 
         self.model.labels_changed.connect(self.refresh)
         self.cellDoubleClicked.connect(self.jump_to_label)
 
+        self.setEditTriggers(QtWidgets.QAbstractItemView.DoubleClicked |
+                             QtWidgets.QAbstractItemView.SelectedClicked)
+        self.itemChanged.connect(self._on_item_changed)
+
     def refresh(self):
+        self._updating = True
         df = self.model.labels
         self.setRowCount(len(df))
 
@@ -307,11 +352,35 @@ class LabelTable(QtWidgets.QTableWidget):
             self.setItem(i, 2, QtWidgets.QTableWidgetItem(str(row["category"])))
 
         self.resizeColumnsToContents()
+        self._updating = False
 
     def jump_to_label(self, row, col):
         start = int(self.item(row, 0).text())
         self.model.set_frame(start)
 
+    def _on_item_changed(self, item):
+        if self._updating:
+            return
+
+        row = item.row()
+        col = item.column()
+
+        start = end = category = None
+
+        if col == 0:
+            try:
+                start = int(item.text())
+            except ValueError:
+                return
+        elif col == 1:
+            try:
+                end = int(item.text())
+            except ValueError:
+                return
+        elif col == 2:
+            category = item.text()  # or convert to Enum
+
+        self.model.edit_label(row, start=start, end=end, category=category)
 
 class MainWindow(QtWidgets.QMainWindow):
 
