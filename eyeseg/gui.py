@@ -888,7 +888,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
         elif key == QtCore.Qt.Key_S:
-            # Show modal to adjust step size
             step, ok = QtWidgets.QInputDialog.getInt(
                 self,
                 "Set Step Size",
