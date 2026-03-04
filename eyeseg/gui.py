@@ -206,8 +206,20 @@ class TimeSeriesWidget(pg.PlotWidget):
 
         self.left_curve = self.plot(self.time, self.left, pen=pg.mkPen(*colors[1]))
         self.right_curve = self.plot(self.time, self.right, pen=pg.mkPen(*colors[3]))
-        self.frame_line = pg.InfiniteLine(angle=90, movable=False)
+        self.frame_line = pg.InfiniteLine(
+            angle=90, 
+            movable=False,
+            pen=pg.mkPen(color=(177, 177, 177), width=1, style=QtCore.Qt.DotLine)
+        )
+        self.zero_line = pg.InfiniteLine(
+            angle=0,
+            movable=False,
+            pen=pg.mkPen(color=(177, 177, 177), width=1, style=QtCore.Qt.DotLine)
+        )  
+        self.frame_line.setZValue(-1)      
+        self.zero_line.setZValue(-1)
         self.addItem(self.frame_line)
+        self.addItem(self.zero_line)
 
         self.region_items = []
 
@@ -216,6 +228,7 @@ class TimeSeriesWidget(pg.PlotWidget):
         self.enableAutoRange(axis='y', enable=False)
         self.enableAutoRange(axis='x', enable=False)
         self.setYRange(-70, 70, padding=0)
+        self.setMouseEnabled(x=False, y=False)
 
         self.model.frame_changed.connect(self.update_view)
         self.model.labels_changed.connect(self.update_regions)
