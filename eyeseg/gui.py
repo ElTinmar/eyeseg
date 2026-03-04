@@ -285,7 +285,6 @@ class TimeSeriesWidget(pg.PlotWidget):
             self.addItem(region)
             self.region_items.append(region)
 
-
 class LabelTable(QtWidgets.QTableWidget):
 
     def __init__(self, model):
@@ -296,7 +295,6 @@ class LabelTable(QtWidgets.QTableWidget):
         self.setHorizontalHeaderLabels(["Start", "End", "Category"])
 
         self.model.labels_changed.connect(self.refresh)
-
         self.cellDoubleClicked.connect(self.jump_to_label)
 
     def refresh(self):
@@ -309,7 +307,6 @@ class LabelTable(QtWidgets.QTableWidget):
             self.setItem(i, 2, QtWidgets.QTableWidgetItem(str(row["category"])))
 
         self.resizeColumnsToContents()
-
 
     def jump_to_label(self, row, col):
         start = int(self.item(row, 0).text())
