@@ -486,6 +486,51 @@ class MainWindow(QtWidgets.QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
+        help_menu = menubar.addMenu("Help")
+
+        shortcuts_action = QtWidgets.QAction("Keyboard Shortcuts...", self)
+        shortcuts_action.triggered.connect(self.show_shortcuts_dialog)
+        help_menu.addAction(shortcuts_action)
+
+    def show_shortcuts_dialog(self):
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Keyboard Shortcuts")
+        dialog.setModal(True)
+        dialog.resize(400, 300)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        table = QtWidgets.QTableWidget()
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(["Shortcut", "Action"])
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+
+        shortcuts = [
+            ("Right Arrow", "Next frame"),
+            ("Left Arrow", "Previous frame"),
+            ("Ctrl + Right", "Forward 10 frames"),
+            ("Ctrl + Left", "Backward 10 frames"),
+            ("Space", "Play / Pause"),
+            ("H", "Toggle overlay visibility"),
+            ("L", "Add label"),
+            ("Delete", "Delete selected label(s)")
+        ]
+
+        table.setRowCount(len(shortcuts))
+
+        for row, (key, action) in enumerate(shortcuts):
+            table.setItem(row, 0, QtWidgets.QTableWidgetItem(key))
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(action))
+
+        table.resizeColumnsToContents()
+        table.horizontalHeader().setStretchLastSection(True)
+
+        layout.addWidget(table)
+        dialog.exec_()
+        
     def load_video(self):
 
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
