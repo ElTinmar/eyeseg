@@ -13,6 +13,10 @@ class LabelCategory(Enum):
     EYE_CONVERGENCE = "eye convergence"
     PURSUITS = "pursuits"
 
+LABEL_COLOR = {
+    LabelCategory.EYE_CONVERGENCE: (177, 40, 40, 120),
+    LabelCategory.PURSUITS: (40, 177, 40, 120)
+}
 
 class SessionModel(QtCore.QObject):
 
@@ -279,14 +283,10 @@ class TimeSeriesWidget(pg.PlotWidget):
             start_time = row["start"] / self.model.fps
             end_time = row["end"] / self.model.fps
 
-            region = pg.LinearRegionItem(
-                values=(start_time, end_time),
-                brush=(255, 0, 0, 60),
-                movable=False
-            )
-
-            # Keep region behind curves and cursor
-            region.setZValue(-10)
+            region = QtWidgets.QGraphicsRectItem(start_time, -70, end_time - start_time, 140)
+            region.setBrush(QColor(*LABEL_COLOR[row.category]))
+            region.setPen(QColor(0, 0, 0, 0))      
+            region.setZValue(-10) 
 
             self.addItem(region)
             self.region_items.append(region)
@@ -304,6 +304,7 @@ class LabelTable(QtWidgets.QTableWidget):
         self.model.labels_changed.connect(self.refresh)
 
         self.cellDoubleClicked.connect(self.jump_to_label)
+        self.resizeColumnsToContents()
 
     def refresh(self):
         df = self.model.labels
