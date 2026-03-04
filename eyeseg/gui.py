@@ -515,6 +515,8 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Left Arrow", "Previous frame"),
             ("Ctrl + Right", "Forward 10 frames"),
             ("Ctrl + Left", "Backward 10 frames"),
+            ("Ctrl + s", "Save labels CSV"),
+            ("Ctrl + q", "Exit"),
             ("Space", "Play / Pause"),
             ("H", "Toggle overlay visibility"),
             ("L", "Add label"),
