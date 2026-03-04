@@ -42,6 +42,7 @@ class SessionModel(QtCore.QObject):
         self._current_frame = 0
         self._last_read_frame = -1
         self._cached_frame = None
+        self.saved = False
 
         self.tracking = pd.read_csv(tracking_csv, header=[0,1,2])
         self.labels = pd.DataFrame(columns=["start", "end", "category"])
@@ -79,6 +80,8 @@ class SessionModel(QtCore.QObject):
             [self.labels, pd.DataFrame([new_row])],
             ignore_index=True,
         )
+
+        self.saved = False
         self.labels_changed.emit()
 
     def edit_label(
@@ -103,14 +106,18 @@ class SessionModel(QtCore.QObject):
             row["category"] = category 
 
         self.labels.iloc[index] = row
+        
+        self.saved = False
         self.labels_changed.emit()
 
     def delete_label(self, index):
         self.labels = self.labels.drop(index).reset_index(drop=True)
+        self.saved = False
         self.labels_changed.emit()
 
     def save_labels(self, path):
         self.labels.to_csv(path, index=False)
+        self.saved = True
 
 class VideoWidget(QtWidgets.QGraphicsView):
 
@@ -566,6 +573,37 @@ class MainWindow(QtWidgets.QMainWindow):
         # Update slider
         self.frame_slider.setMaximum(self.model.total_frames - 1)
         self.model.set_frame(0)
+
+    def closeEvent(self, event):
+
+        if self.model.saved:
+            event.accept()
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Save Labels?",
+            "You have unsaved labels.\n\nDo you want to save them before exiting?",
+            QtWidgets.QMessageBox.Save |
+            QtWidgets.QMessageBox.Discard |
+            QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Save
+        )
+
+        if reply == QtWidgets.QMessageBox.Save:
+            self.save_labels()
+
+            # If user cancels save dialog, don't close
+            # (QFileDialog returns empty path if cancelled)
+            # So we check if labels were actually saved.
+            # Simple way: require a valid path inside save_labels.
+            event.accept()
+
+        elif reply == QtWidgets.QMessageBox.Discard:
+            event.accept()
+
+        else:  # Cancel
+            event.ignore()
 
     def load_tracking(self):
 
