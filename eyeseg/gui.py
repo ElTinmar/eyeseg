@@ -26,6 +26,10 @@ DIVERGING_4 = (
     (103, 169, 207),  # light blue
 )
 
+class InteractionState(Enum):
+    IDLE = 0
+    ADDING_LABEL = 1
+
 class SessionModel(QtCore.QObject):
 
     frame_changed = QtCore.pyqtSignal(int)
@@ -411,6 +415,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, video_path, tracking_csv):
         super().__init__()
 
+        self._label_region = None
+        self._label_category = None
+        self._state = InteractionState.IDLE
+
         self.model = SessionModel(video_path, tracking_csv)
 
         self.video = VideoWidget(self.model)
@@ -674,27 +682,15 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.play()
 
+
     def add_label_dialog(self):
 
-        start, ok1 = QtWidgets.QInputDialog.getInt(
-            self, "Start Frame", "Start:",
-            value=self.model.current_frame,
-            min=0,
-            max=self.model.total_frames
-        )
-        if not ok1:
+        if self._state != InteractionState.IDLE:
             return
 
-        end, ok2 = QtWidgets.QInputDialog.getInt(
-            self, "End Frame", "End:",
-            value=start+10,
-            min=start,
-            max=self.model.total_frames
-        )
-        if not ok2:
-            return
-
-        category, ok3 = QtWidgets.QInputDialog.getItem(
+        self._state = InteractionState.ADDING_LABEL
+        
+        category, ok = QtWidgets.QInputDialog.getItem(
             self,
             "Category",
             "Category:",
@@ -702,12 +698,36 @@ class MainWindow(QtWidgets.QMainWindow):
             current=0,
             editable=False
         )
-        if not ok3:
+
+        if not ok:
+            self._state = InteractionState.IDLE
             return
 
-        # Convert back to Enum for internal storage
-        category_enum = LabelCategory(category)
-        self.model.add_label(start, end, category_enum)
+        self._label_category = LabelCategory(category)
+
+        # Initial region around current frame
+        current_time = self.model.current_frame / self.model.fps
+        duration = 1.0  # default 1 second
+
+        region = pg.LinearRegionItem(
+            values=(current_time, current_time + duration),
+            movable=True,
+            brush=(200, 200, 200, 50)
+        )
+
+        region.setZValue(100)
+        self.plot.addItem(region)
+
+        self._label_region = region
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "Select Label Range",
+            "Adjust the region on the plot.\n\n"
+            "Press ENTER to confirm.\n"
+            "Press ESC to cancel."
+        )
+        
 
     def save_labels(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -716,11 +736,55 @@ class MainWindow(QtWidgets.QMainWindow):
         if path:
             self.model.save_labels(path)
 
+    def _confirm_label(self):
+
+        if self._state != InteractionState.ADDING_LABEL:
+            return
+
+        region = self._label_region
+        t_min, t_max = region.getRegion()
+
+        start_frame = int(t_min * self.model.fps)
+        end_frame = int(t_max * self.model.fps)
+
+        start_frame = max(0, min(start_frame, self.model.total_frames - 1))
+        end_frame = max(start_frame, min(end_frame, self.model.total_frames - 1))
+
+        self.model.add_label(start_frame, end_frame, self._label_category)
+
+        self.plot.removeItem(region)
+        self._label_region = None
+        self._label_category = None
+        self._state = InteractionState.IDLE
+
+    def _cancel_label(self):
+        
+        if self._state != InteractionState.ADDING_LABEL:
+            return
+
+        if self._label_region:
+            self.plot.removeItem(self._label_region)
+
+        self._label_region = None
+        self._label_category = None
+
+        self._state = InteractionState.IDLE
+        
     def keyPressEvent(self, event):
         key = event.key()
         modifiers = event.modifiers()
 
         step = 1
+
+        if key == QtCore.Qt.Key_Return and self._label_region is not None:
+            if self._state == InteractionState.ADDING_LABEL:
+                self._confirm_label()
+                return
+
+        elif key == QtCore.Qt.Key_Escape and self._label_region is not None:
+            if self._state == InteractionState.ADDING_LABEL:
+                self._cancel_label()
+                return
 
         if modifiers & QtCore.Qt.ControlModifier:
             step = 10
@@ -737,7 +801,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.video.toggle_overlay_visibility()
 
         elif key == QtCore.Qt.Key_L:
-            self.add_label_dialog()
+            if self._state == InteractionState.IDLE:
+                self.add_label_dialog()
 
         elif key == QtCore.Qt.Key_Space:
             self.toggle_play()
