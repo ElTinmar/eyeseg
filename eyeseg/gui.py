@@ -410,6 +410,60 @@ class LabelTable(QtWidgets.QTableWidget):
         for row in sorted(selected, reverse=True):  
             self.model.delete_label(row)
 
+class StateInfoWidget(QtWidgets.QFrame):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        self.state_label = QtWidgets.QLabel()
+        self.step_label = QtWidgets.QLabel()
+        self.commands_label = QtWidgets.QLabel()
+
+        self.state_label.setStyleSheet("font-weight: bold;")
+        self.commands_label.setStyleSheet("color: gray;")
+
+        layout.addWidget(self.state_label)
+        layout.addWidget(self.commands_label)
+        layout.addWidget(self.step_label)
+        layout.addStretch()
+
+        self.set_state(InteractionState.IDLE)
+        self.set_step(10)
+
+    def set_step(self, step: int):
+        self.step_label.setText(f"STEP: {step}")
+
+    def set_state(self, state: InteractionState):
+
+        if state == InteractionState.IDLE:
+            self.state_label.setText("STATE: IDLE")
+
+            self.commands_label.setText(
+                "L → Add label \n"
+                "← → Move frame \n"
+                f"Ctrl+← → Move STEP frames \n"
+                "Space → Play/Pause \n"
+                "H → Hide overlay \n"
+                "S → set step size"
+            )
+
+        elif state == InteractionState.ADDING_LABEL:
+            self.state_label.setText("STATE: ADDING LABEL")
+
+            self.commands_label.setText(
+                "ENTER → Confirm label \n"
+                "ESC → Cancel \n"
+                "← → Adjust range \n"
+                f"Ctrl+← → Adjust range by STEP frames \n"
+                "Space → Play (region grows) \n"
+                "H → Hide overlay \n"
+                "S → set step size"
+            )
+
 class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self, video_path, tracking_csv):
@@ -418,10 +472,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._label_region = None
         self._label_category = None
         self._state = InteractionState.IDLE
+        self._step = 10
 
         self.model = SessionModel(video_path, tracking_csv)
         self.model.frame_changed.connect(self._update_label_region)
-
+        self.state_panel = StateInfoWidget()
+        
         self.video = VideoWidget(self.model)
         self._is_playing = False
         self.play_timer = QtCore.QTimer(self)
@@ -461,10 +517,14 @@ class MainWindow(QtWidgets.QMainWindow):
         slider.addWidget(self.frame_slider)
         slider.addWidget(self.slider_label_frame)
 
+        bottom =  QtWidgets.QHBoxLayout()
+        bottom.addWidget(self.table)
+        bottom.addWidget(self.state_panel)
+
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(top)
         layout.addLayout(slider)
-        layout.addWidget(self.table)
+        layout.addLayout(bottom)
 
         container = QtWidgets.QWidget()
         container.setLayout(layout)
@@ -530,12 +590,13 @@ class MainWindow(QtWidgets.QMainWindow):
         shortcuts = [
             ("Right Arrow", "Next frame"),
             ("Left Arrow", "Previous frame"),
-            ("Ctrl + Right", "Forward 10 frames"),
-            ("Ctrl + Left", "Backward 10 frames"),
+            ("Ctrl + Right", f"Forward {self._step} frames"),
+            ("Ctrl + Left", f"Backward {self._step} frames"),
             ("Ctrl + s", "Save labels CSV"),
             ("Ctrl + q", "Exit"),
             ("Space", "Play / Pause"),
             ("H", "Toggle overlay visibility"),
+            ("S", "Set step size"),
             ("L", "Add label"),
             ("Delete", "Delete selected label(s)")
         ]
@@ -551,6 +612,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         layout.addWidget(table)
         dialog.exec_()
+
+    def set_state(self, new_state: InteractionState):
+
+        if self._state == new_state:
+            return
+
+        self._state = new_state
+        self.state_panel.set_state(new_state)
         
     def load_video(self):
 
@@ -689,7 +758,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._state != InteractionState.IDLE:
             return
 
-        self._state = InteractionState.ADDING_LABEL
+        self.set_state(InteractionState.ADDING_LABEL)
         
         category, ok = QtWidgets.QInputDialog.getItem(
             self,
@@ -701,7 +770,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         if not ok:
-            self._state = InteractionState.IDLE
+            self.set_state(InteractionState.IDLE)
             return
 
         self._label_category = LabelCategory(category)
@@ -720,15 +789,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot.addItem(region)
 
         self._label_region = region
-
-        QtWidgets.QMessageBox.information(
-            self,
-            "Select Label Range",
-            "Adjust the region on the plot.\n\n"
-            "Press ENTER to confirm.\n"
-            "Press ESC to cancel."
-        )
-        
 
     def save_labels(self):
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -756,7 +816,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot.removeItem(region)
         self._label_region = None
         self._label_category = None
-        self._state = InteractionState.IDLE
+        self.set_state(InteractionState.IDLE)
 
     def _cancel_label(self):
         
@@ -769,7 +829,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._label_region = None
         self._label_category = None
 
-        self._state = InteractionState.IDLE
+        self.set_state(InteractionState.IDLE)
 
     def _update_label_region(self, frame_idx):
 
@@ -799,8 +859,23 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._cancel_label()
                 return
 
+        elif key == QtCore.Qt.Key_S:
+            # Show modal to adjust step size
+            step, ok = QtWidgets.QInputDialog.getInt(
+                self,
+                "Set Step Size",
+                "Enter frame step size:",
+                value=self._step,
+                min=1,
+                max=100,
+                step=10
+            )
+            if ok:
+                self._step = step
+                self.state_panel.set_step(self._step)
+                
         if modifiers & QtCore.Qt.ControlModifier:
-            step = 10
+            step = self._step
 
         if key == QtCore.Qt.Key_Right:
             self.pause()
