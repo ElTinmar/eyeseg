@@ -1,14 +1,15 @@
 import sys
-import cv2
-import pandas as pd
-import numpy as np
 from enum import Enum
 
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter, QKeySequence
 from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox
-
 import pyqtgraph as pg
+
+from scipy.signal import savgol_filter
+import cv2
+import pandas as pd
+import numpy as np
 
 class LabelCategory(Enum):
     EYE_CONVERGENCE = "eye convergence"
@@ -252,6 +253,11 @@ class TimeSeriesWidget(pg.PlotWidget):
         self.window_seconds = float(window_seconds)
 
         self.left, self.right = get_eye_angles_from_keypoints(self.model.tracking)
+
+        self.show_smooth = False  
+        self.left_smooth = savgol_filter(self.left, window_length=11, polyorder=2)
+        self.right_smooth = savgol_filter(self.right, window_length=11, polyorder=2)
+
         n = len(self.left)
         self.time = np.arange(n) / self.model.fps
 
@@ -286,6 +292,12 @@ class TimeSeriesWidget(pg.PlotWidget):
 
         self.update_view(0)
 
+    def update_curve_data(self):
+        left_data = self.left_smooth if self.show_smooth else self.left
+        right_data = self.right_smooth if self.show_smooth else self.right
+        self.left_curve.setData(self.time, left_data)
+        self.right_curve.setData(self.time, right_data)
+        
     def update_view(self, frame_idx):
 
         current_time = frame_idx / self.model.fps
@@ -454,7 +466,8 @@ class StateInfoWidget(QtWidgets.QFrame):
                 f"Ctrl+← → Move STEP frames \n"
                 "Space → Play/Pause \n"
                 "H → Hide overlay \n"
-                "S → set step size"
+                "S → Set step size \n"
+                "M → Smooth traces"
             )
 
         elif state == InteractionState.ADDING_LABEL:
@@ -467,7 +480,8 @@ class StateInfoWidget(QtWidgets.QFrame):
                 f"Ctrl+← → Adjust range by STEP frames \n"
                 "Space → Play (region grows) \n"
                 "H → Hide overlay \n"
-                "S → set step size"
+                "S → Set step size \n"
+                "M → Smooth traces"
             )
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -608,6 +622,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ("H", "Toggle overlay visibility"),
             ("S", "Set step size"),
             ("L", "Add label"),
+            ("M", "Smooth traces"),
             ("Delete", "Delete selected label(s)")
         ]
 
@@ -894,6 +909,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pause()
             self.model.set_frame(self.model.current_frame + step)
 
+        elif event.key() == QtCore.Qt.Key_M:
+            self.plot.show_smooth = not self.plot.show_smooth
+            self.plot.update_curve_data()
+            
         elif key == QtCore.Qt.Key_Left:
             self.pause()
             self.model.set_frame(self.model.current_frame - step)
