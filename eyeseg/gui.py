@@ -14,10 +14,12 @@ import numpy as np
 class LabelCategory(Enum):
     EYE_CONVERGENCE = "eye convergence"
     PURSUITS = "pursuits"
+    SPONTANEOUS_SQUARE = "spontaneous square"
 
 LABEL_COLOR = {
     LabelCategory.EYE_CONVERGENCE: (255, 200, 120, 120),
-    LabelCategory.PURSUITS: (144, 238, 144, 120)
+    LabelCategory.PURSUITS: (144, 238, 144, 120),
+    LabelCategory.SPONTANEOUS_SQUARE: (144, 238, 144, 120)
 }
 
 DIVERGING_4 = (
@@ -295,7 +297,7 @@ class TimeSeriesWidget(pg.PlotWidget):
     def __init__(
             self, 
             model, 
-            window_seconds=10.0,
+            window_seconds=15.0,
             colors = DIVERGING_4
         ):
         super().__init__()
