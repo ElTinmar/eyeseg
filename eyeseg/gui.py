@@ -8,7 +8,6 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter
 import pyqtgraph as pg
 
-
 class LabelCategory(Enum):
     EYE_CONVERGENCE = "eye convergence"
     PURSUITS = "pursuits"
@@ -17,6 +16,13 @@ LABEL_COLOR = {
     LabelCategory.EYE_CONVERGENCE: (177, 40, 40, 120),
     LabelCategory.PURSUITS: (40, 177, 40, 120)
 }
+
+DIVERGING_4 = (
+    (178, 24, 43),    # strong red
+    (239, 138, 98),   # light red
+    (33, 102, 172),   # strong blue
+    (103, 169, 207),  # light blue
+)
 
 class SessionModel(QtCore.QObject):
 
@@ -79,14 +85,6 @@ class SessionModel(QtCore.QObject):
 
     def save_labels(self, path):
         self.labels.to_csv(path, index=False)
-
-
-DIVERGING_4 = (
-    (178, 24, 43),    # strong red
-    (239, 138, 98),   # light red
-    (33, 102, 172),   # strong blue
-    (103, 169, 207),  # light blue
-)
 
 class VideoWidget(QtWidgets.QGraphicsView):
 
@@ -246,8 +244,6 @@ class TimeSeriesWidget(pg.PlotWidget):
 
         self.update_view(0)
 
-    # --------------------------------------------------------
-
     def update_view(self, frame_idx):
 
         current_time = frame_idx / self.model.fps
@@ -265,8 +261,6 @@ class TimeSeriesWidget(pg.PlotWidget):
             t_min = max(0, t_max - self.window_seconds)
 
         self.setXRange(t_min, t_max, padding=0)
-
-    # --------------------------------------------------------
 
     def update_regions(self):
         """
