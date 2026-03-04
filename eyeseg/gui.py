@@ -13,8 +13,8 @@ class LabelCategory(Enum):
     PURSUITS = "pursuits"
 
 LABEL_COLOR = {
-    LabelCategory.EYE_CONVERGENCE: (177, 40, 40, 120),
-    LabelCategory.PURSUITS: (40, 177, 40, 120)
+    LabelCategory.EYE_CONVERGENCE: (255, 200, 120, 120),
+    LabelCategory.PURSUITS: (144, 238, 144, 120)
 }
 
 DIVERGING_4 = (
@@ -298,7 +298,6 @@ class LabelTable(QtWidgets.QTableWidget):
         self.model.labels_changed.connect(self.refresh)
 
         self.cellDoubleClicked.connect(self.jump_to_label)
-        self.resizeColumnsToContents()
 
     def refresh(self):
         df = self.model.labels
@@ -308,6 +307,9 @@ class LabelTable(QtWidgets.QTableWidget):
             self.setItem(i, 0, QtWidgets.QTableWidgetItem(str(row["start"])))
             self.setItem(i, 1, QtWidgets.QTableWidgetItem(str(row["end"])))
             self.setItem(i, 2, QtWidgets.QTableWidgetItem(str(row["category"])))
+
+        self.resizeColumnsToContents()
+
 
     def jump_to_label(self, row, col):
         start = int(self.item(row, 0).text())
@@ -486,6 +488,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         elif key == QtCore.Qt.Key_H:
             self.video.toggle_overlay_visibility()
+
+        elif key == QtCore.Qt.Key_L:
+            self.add_label_dialog()
 
         elif key == QtCore.Qt.Key_Space:
             self.toggle_play()
