@@ -463,7 +463,7 @@ class StateInfoWidget(QtWidgets.QFrame):
             self.commands_label.setText(
                 "L → Add label \n"
                 "← → Move frame \n"
-                f"Ctrl+← → Move STEP frames \n"
+                "Ctrl+← → Move STEP frames \n"
                 "Space → Play/Pause \n"
                 "H → Hide overlay \n"
                 "S → Set step size \n"
@@ -477,7 +477,7 @@ class StateInfoWidget(QtWidgets.QFrame):
                 "ENTER → Confirm label \n"
                 "ESC → Cancel \n"
                 "← → Adjust range \n"
-                f"Ctrl+← → Adjust range by STEP frames \n"
+                "Ctrl+← → Adjust range by STEP frames \n"
                 "Space → Play (region grows) \n"
                 "H → Hide overlay \n"
                 "S → Set step size \n"
