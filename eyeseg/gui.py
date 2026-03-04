@@ -140,6 +140,8 @@ class VideoWidget(QtWidgets.QGraphicsView):
 
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
 
+        self.update_frame(0)
+
     def update_frame(self, frame_idx):
         frame = self.model.get_frame()
         if frame is None:
@@ -403,8 +405,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, video_path, tracking_csv):
         super().__init__()
 
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
-
         self.model = SessionModel(video_path, tracking_csv)
 
         self.video = VideoWidget(self.model)
@@ -435,9 +435,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plot = TimeSeriesWidget(self.model)
         self.table = LabelTable(self.model)
 
-        add_label_btn = QtWidgets.QPushButton("Add Label")
-        add_label_btn.clicked.connect(self.add_label_dialog)
-
         save_btn = QtWidgets.QPushButton("Save Labels")
         save_btn.clicked.connect(self.save_labels)
 
@@ -454,7 +451,6 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addLayout(top)
         layout.addLayout(slider)
         layout.addWidget(self.table)
-        layout.addWidget(add_label_btn)
         layout.addWidget(save_btn)
 
         container = QtWidgets.QWidget()
@@ -548,10 +544,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.model.save_labels(path)
 
     def keyPressEvent(self, event):
-
-        if event.isAutoRepeat():
-            return
-
         key = event.key()
         modifiers = event.modifiers()
 
