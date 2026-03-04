@@ -5,7 +5,7 @@ import numpy as np
 from enum import Enum
 
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter
+from PyQt5.QtGui import QPen, QBrush, QColor, QImage, QPixmap, QPainter, QKeySequence
 from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox
 
 import pyqtgraph as pg
@@ -73,7 +73,7 @@ class SessionModel(QtCore.QObject):
         self._cached_frame = frame
         return frame
 
-    def add_label(self, start, end, category):
+    def add_label(self, start: int, end: int, category: LabelCategory):
         new_row = {"start": start, "end": end, "category": category}
         self.labels = pd.concat(
             [self.labels, pd.DataFrame([new_row])],
@@ -81,7 +81,14 @@ class SessionModel(QtCore.QObject):
         )
         self.labels_changed.emit()
 
-    def edit_label(self, index: int, start=None, end=None, category=None):
+    def edit_label(
+            self, 
+            index: int, 
+            start: int|None = None, 
+            end: int|None = None, 
+            category: LabelCategory|None = None
+        ):
+
         if index < 0 or index >= len(self.labels):
             return
 
@@ -93,7 +100,7 @@ class SessionModel(QtCore.QObject):
         if end is not None:
             row["end"] = int(end)
         if category is not None:
-            row["category"] = category if isinstance(category, str) else str(category)
+            row["category"] = category 
 
         self.labels.iloc[index] = row
         self.labels_changed.emit()
@@ -341,6 +348,9 @@ class LabelTable(QtWidgets.QTableWidget):
                              QtWidgets.QAbstractItemView.SelectedClicked)
         self.itemChanged.connect(self._on_item_changed)
 
+        self.delete_shortcut = QtWidgets.QShortcut(QKeySequence("Delete"), self)
+        self.delete_shortcut.activated.connect(self.delete_selected_rows)
+
     def refresh(self):
         self._updating = True
         df = self.model.labels
@@ -359,6 +369,7 @@ class LabelTable(QtWidgets.QTableWidget):
         self.model.set_frame(start)
 
     def _on_item_changed(self, item):
+
         if self._updating:
             return
 
@@ -378,9 +389,14 @@ class LabelTable(QtWidgets.QTableWidget):
             except ValueError:
                 return
         elif col == 2:
-            category = item.text()  # or convert to Enum
+            category = LabelCategory(item.text())
 
         self.model.edit_label(row, start=start, end=end, category=category)
+
+    def delete_selected_rows(self):
+        selected = set(idx.row() for idx in self.selectedIndexes())
+        for row in sorted(selected, reverse=True):  
+            self.model.delete_label(row)
 
 class MainWindow(QtWidgets.QMainWindow):
 
