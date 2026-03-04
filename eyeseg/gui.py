@@ -243,7 +243,8 @@ class VideoWidget(QtWidgets.QGraphicsView):
             self, 
             frame_idx, 
             r = 2,
-            colors = DIVERGING_4       
+            colors = DIVERGING_4,
+            likelihood_threshold = 0.9       
         ):
 
         # Clear old keypoints
@@ -264,23 +265,26 @@ class VideoWidget(QtWidgets.QGraphicsView):
             for position in ['front', 'back']:
                 x = row[f"eye_{side}_{position}"].x
                 y = row[f"eye_{side}_{position}"].y
-                points.append((x,y))
+                l = row[f"eye_{side}_{position}"].likelihood
+                points.append((x,y,l))
                 
-                ellipse = self.scene.addEllipse(
-                    x - r, y - r, 2*r, 2*r,
-                    pen=QPen(QColor(*colors[count])),
-                    brush=QBrush(QColor(*colors[count]))
-                )
-                ellipse.setZValue(2)
-                self.keypoint_items.append(ellipse)
+                if l > likelihood_threshold:
+                    ellipse = self.scene.addEllipse(
+                        x - r, y - r, 2*r, 2*r,
+                        pen=QPen(QColor(*colors[count])),
+                        brush=QBrush(QColor(*colors[count]))
+                    )
+                    ellipse.setZValue(2)
+                    self.keypoint_items.append(ellipse)
                 count += 1
 
-            line = self.scene.addLine(
-                points[0][0],points[0][1],points[1][0],points[1][1],
-                pen=QPen(QColor(*colors[count-1]))
-            )
-            line.setZValue(1)
-            self.keypoint_items.append(line)
+            if (points[0][2] > likelihood_threshold) & (points[1][2] > likelihood_threshold):  
+                line = self.scene.addLine(
+                    points[0][0],points[0][1],points[1][0],points[1][1],
+                    pen=QPen(QColor(*colors[count-1]))
+                )
+                line.setZValue(1)
+                self.keypoint_items.append(line)
 
     def toggle_overlay_visibility(self):
         self.overlay_visible = not self.overlay_visible
