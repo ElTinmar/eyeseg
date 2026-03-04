@@ -493,6 +493,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Exit
         exit_action = QtWidgets.QAction("Exit", self)
         exit_action.triggered.connect(self.close)
+        exit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        exit_action.setShortcutContext(QtCore.Qt.ApplicationShortcut)
         file_menu.addAction(exit_action)
 
         help_menu = menubar.addMenu("Help")
