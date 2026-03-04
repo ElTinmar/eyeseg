@@ -420,6 +420,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._state = InteractionState.IDLE
 
         self.model = SessionModel(video_path, tracking_csv)
+        self.model.frame_changed.connect(self._update_label_region)
 
         self.video = VideoWidget(self.model)
         self._is_playing = False
@@ -769,7 +770,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self._label_category = None
 
         self._state = InteractionState.IDLE
-        
+
+    def _update_label_region(self, frame_idx):
+
+        if self._state != InteractionState.ADDING_LABEL:
+            return
+
+        if self._label_region is None:
+            return
+
+        current_time = frame_idx / self.model.fps
+        t_min, t_max = self._label_region.getRegion()
+        self._label_region.setRegion((t_min, current_time))
+            
     def keyPressEvent(self, event):
         key = event.key()
         modifiers = event.modifiers()
