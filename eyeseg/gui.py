@@ -254,7 +254,7 @@ class TimeSeriesWidget(pg.PlotWidget):
 
         self.left, self.right = get_eye_angles_from_keypoints(self.model.tracking)
 
-        self.show_smooth = False  
+        self.show_smooth = True  
         self.left_smooth = savgol_filter(self.left, window_length=21, polyorder=2)
         self.right_smooth = savgol_filter(self.right, window_length=21, polyorder=2)
 
@@ -467,7 +467,7 @@ class StateInfoWidget(QtWidgets.QFrame):
                 "Space → Play/Pause \n"
                 "H → Hide overlay \n"
                 "S → Set step size \n"
-                "M → Smooth traces"
+                "M → Toggle smoothing"
             )
 
         elif state == InteractionState.ADDING_LABEL:
@@ -481,7 +481,7 @@ class StateInfoWidget(QtWidgets.QFrame):
                 "Space → Play (region grows) \n"
                 "H → Hide overlay \n"
                 "S → Set step size \n"
-                "M → Smooth traces"
+                "M → Toggle smoothing"
             )
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -622,7 +622,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ("H", "Toggle overlay visibility"),
             ("S", "Set step size"),
             ("L", "Add label"),
-            ("M", "Smooth traces"),
+            ("M", "Toggle smoothing"),
             ("Delete", "Delete selected label(s)")
         ]
 
