@@ -127,6 +127,7 @@ class VideoWidget(QtWidgets.QGraphicsView):
     def __init__(self, model):
         super().__init__()
         self.model = model
+        self.model.frame_changed.connect(self.update_frame)
 
         self.scene = QtWidgets.QGraphicsScene()
         self.setScene(self.scene)
@@ -137,18 +138,21 @@ class VideoWidget(QtWidgets.QGraphicsView):
         self.keypoint_items = []
         self.overlay_visible = True
 
-        self.model.frame_changed.connect(self.update_frame)
+        self.setFocusPolicy(QtCore.Qt.NoFocus)
+        
+        self.scene.setBackgroundBrush(QtCore.Qt.transparent)
+        self.setStyleSheet("background: transparent")
+        self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
 
         self.setRenderHint(QPainter.Antialiasing)
         self.setRenderHint(QPainter.SmoothPixmapTransform)
-
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-
         self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
         self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
-
         self.setFrameShape(QtWidgets.QFrame.NoFrame)
+
+        self.setFixedSize(512, 512)
 
         self.update_frame(0)
 
@@ -434,6 +438,8 @@ class StateInfoWidget(QtWidgets.QFrame):
         self.set_state(InteractionState.IDLE)
         self.set_step(10)
 
+        self.setFocusPolicy(QtCore.Qt.NoFocus)
+
     def set_step(self, step: int):
         self.step_label.setText(f"STEP: {step}")
 
@@ -495,6 +501,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.frame_slider.setPageStep(10)  
         self.frame_slider.setTracking(True)
         self.frame_slider.valueChanged.connect(self.model.set_frame)
+        self.frame_slider.setFocusPolicy(QtCore.Qt.NoFocus)
         self.model.frame_changed.connect(self._update_slider)
         
         self.slider_label_frame = QtWidgets.QLabel(f"{self.model.current_frame}/{self.model.total_frames}")
@@ -530,7 +537,10 @@ class MainWindow(QtWidgets.QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        #self.resize(1200, 900)
+        self.resize(1280, 720)
+
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setFocus()
 
     def _create_menu(self):
 
