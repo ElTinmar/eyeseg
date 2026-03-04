@@ -680,12 +680,10 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         if reply == QtWidgets.QMessageBox.Save:
-            self.save_labels()
+            if not self.save_labels():
+                event.ignore()
+                return
 
-            # If user cancels save dialog, don't close
-            # (QFileDialog returns empty path if cancelled)
-            # So we check if labels were actually saved.
-            # Simple way: require a valid path inside save_labels.
             event.accept()
 
         elif reply == QtWidgets.QMessageBox.Discard:
@@ -800,12 +798,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._label_region = region
 
-    def save_labels(self):
+    def save_labels(self) -> bool:
+        
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, "Save Labels", "", "CSV (*.csv)"
         )
+        
         if path:
             self.model.save_labels(path)
+            return True
+        
+        return False
 
     def _confirm_label(self):
 

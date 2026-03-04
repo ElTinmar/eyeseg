@@ -6,3 +6,5 @@ dependencies:
 - ipython
 - pip
 - ffmpeg
+- pyqt5
+- pandas
