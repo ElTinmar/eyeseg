@@ -83,7 +83,6 @@ class SessionModel(QtCore.QObject):
 
         self._current_frame = 0
         self._last_read_frame = -1
-        self._cached_frame = None
         self.saved = True
 
         self.tracking: pd.DataFrame | None = None
@@ -143,7 +142,6 @@ class SessionModel(QtCore.QObject):
             return None
 
         self._last_read_frame = self._current_frame
-        self._cached_frame = frame
         return frame
 
     def add_label(self, start: int, end: int, category: LabelCategory):
