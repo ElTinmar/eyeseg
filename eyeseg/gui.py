@@ -111,8 +111,8 @@ class SessionModel(QtCore.QObject):
         self.tracking = pd.read_csv(path, header=[0,1,2])
         self.frame_changed.emit(self._current_frame)
         self.left, self.right = get_eye_angles_from_keypoints(self.tracking)
-        self.left_smooth = savgol_filter(self.left, window_length=21, polyorder=2)
-        self.right_smooth = savgol_filter(self.right, window_length=21, polyorder=2)
+        self.left_smooth = savgol_filter(self.left, window_length=41, polyorder=2)
+        self.right_smooth = savgol_filter(self.right, window_length=41, polyorder=2)
         n = len(self.left)
         self.time = np.arange(n) / self.fps
 
