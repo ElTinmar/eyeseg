@@ -13,12 +13,14 @@ import numpy as np
 
 class LabelCategory(Enum):
     EYE_CONVERGENCE = "eye convergence"
-    PURSUITS = "pursuits"
+    PURSUIT_CW = "pursuit cw"
+    PURSUIT_CCW = "pursuit ccw"
     SPONTANEOUS_SQUARE = "spontaneous square"
 
 LABEL_COLOR = {
     LabelCategory.EYE_CONVERGENCE: (255, 200, 120, 120),
-    LabelCategory.PURSUITS: (144, 238, 144, 120),
+    LabelCategory.PURSUIT_CW: (144, 238, 144, 120),
+    LabelCategory.PURSUIT_CCW: (144, 144, 238, 120),
     LabelCategory.SPONTANEOUS_SQUARE: (186, 85, 211, 120)
 }
 
